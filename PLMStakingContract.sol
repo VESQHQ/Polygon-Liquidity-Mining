@@ -108,11 +108,10 @@ contract PLMStakingContract is Ownable, ReentrancyGuard {
         payPendingWMATIC();
 
         if (_amount > 0) {
-            // Accept the balance of coins we recieve.
             uint256 previousBalance = IERC20(PLMToken).balanceOf(address(this));
             IERC20(PLMToken).safeTransferFrom(address(msg.sender), address(this), _amount);
-            _amount = IERC20(PLMToken).balanceOf(address(this)) - previousBalance;
-            require(_amount > 0, "0 PLM recieved");
+            uint256 receivedAmount = IERC20(PLMToken).balanceOf(address(this)) - previousBalance;
+            require(_amount == receivedAmount, "Incorrect amount of PLM received");
 
             user.amount+= _amount;
             lifetimePLMStaked[msg.sender]+= _amount;
