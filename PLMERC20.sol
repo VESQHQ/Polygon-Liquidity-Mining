@@ -99,15 +99,15 @@ contract PLMERC20Token is ERC20Permit, VaultOwned {
         _mint(account_, amount_);
     }
 
-    function burn(uint256 amount) external virtual {
+    function burn(uint256 amount) external {
         _burn(msg.sender, amount);
     }
      
-    function burnFrom(address account_, uint256 amount_) external virtual {
+    function burnFrom(address account_, uint256 amount_) external {
         _burnFrom(account_, amount_);
     }
 
-    function _burnFrom(address account_, uint256 amount_) internal virtual {
+    function _burnFrom(address account_, uint256 amount_) internal {
         uint256 allowance = allowance(account_, msg.sender);
         require(allowance >= amount_, "ERC20: burn amount exceeds allowance");
     

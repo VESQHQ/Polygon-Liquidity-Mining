@@ -7,23 +7,28 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
+import "hardhat/console.sol";
 
 interface IPLMECR20 {
     function burnFrom(address account_, uint256 amount_) external;
 }
 
-// PLMStakingContract is the master of the WMATIC rewards and guardian of the PLM Deposits!.
+// PLMStakingContractTest is the master of the WMATIC rewards and guardian of the PLM Deposits!.
 //
 // Have fun reading it. Hopefully it's bug-free. God bless.
-contract PLMStakingContract is Ownable, ReentrancyGuard {
+contract PLMStakingContractTest is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // The PLM TOKEN!
     address public immutable PLMToken;
 
-    IERC20 public constant WMATIC = IERC20(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
+    // For testing only
+    IERC20 public immutable WMATIC;
+    //IERC20 public constant WMATIC = IERC20(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
 
-    uint256 public constant epochTimeLength = 3600 * 24 * 30;
+    // For testing only
+    uint256 public immutable epochTimeLength;
+    //uint256 public constant epochTimeLength = 3600 * 24 * 30;
 
      // A counter variable to ensure we never withdraw too much WMATIC.
     uint256 public promisedWMATIC = 0;
@@ -52,14 +57,18 @@ contract PLMStakingContract is Ownable, ReentrancyGuard {
     event WhitelistEdit(address indexed participant, bool indexed included);
 
     constructor(
+        IERC20 _WMATIC,
         address _PLMToken,
-        uint256 _startTime
+        /*uint256 _startTime,*/
+        uint256 _epochTimeLength
     ) public {
-        require(block.timestamp < _startTime, "startTime must be in the future!");
+        //require(block.timestamp < _startTime, "startTime must be in the future!");
         require(_PLMToken != address(0), "PLMToken parameter is address(0)");
 
+        WMATIC = _WMATIC;
         PLMToken = _PLMToken;
-        startTime = _startTime;
+        startTime = block.timestamp;
+        epochTimeLength = _epochTimeLength;
     }
 
     // View function to see the end epoch time for a given unix timestamp.
@@ -109,6 +118,11 @@ contract PLMStakingContract is Ownable, ReentrancyGuard {
     // Deposit PLM tokens to this contract for WMATIC.
     function deposit(uint256 _amount) external nonReentrant {
         require(whitelist[msg.sender], "staker is not in the whitelist!");
+
+        uint256 epochEnd = getNextEpochStartTimeForTimestamp(block.timestamp);
+        uint256 epochStartTime = epochEnd - epochTimeLength;
+        console.log("epoch from %s to %s", epochStartTime, epochEnd);
+        console.log("_blockTime %s", block.timestamp);
 
         UserInfo storage user = userInfo[msg.sender];
 
