@@ -118,6 +118,7 @@ contract PLMStakingContractTest is Ownable, ReentrancyGuard {
     // Deposit PLM tokens to this contract for WMATIC.
     function deposit(uint256 _amount) external nonReentrant {
         require(whitelist[msg.sender], "staker is not in the whitelist!");
+        console.log("Deposit amount: %s", _amount);
 
         uint256 epochEnd = getNextEpochStartTimeForTimestamp(block.timestamp);
         uint256 epochStartTime = epochEnd - epochTimeLength;
@@ -168,6 +169,7 @@ contract PLMStakingContractTest is Ownable, ReentrancyGuard {
 
     // Pay pending WMATICs.
     function payPendingWMATIC() internal {
+        console.log("payPendingWMATIC entered");
         UserInfo storage user = userInfo[msg.sender];
 
         uint256 WMATICPending = pendingWMATIC(msg.sender);
@@ -183,6 +185,8 @@ contract PLMStakingContractTest is Ownable, ReentrancyGuard {
 
             // Reduce the amount of WMATIC promised to the user.
             promisedWMATIC-= WMATICPending;
+
+            console.log("WMATICPaid %s", WMATICPending);
         }
 
         resetUserDepositInfo();
