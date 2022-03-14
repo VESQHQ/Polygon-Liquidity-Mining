@@ -53,7 +53,8 @@ contract PLMStakingContract is Ownable, ReentrancyGuard {
 
     constructor(
         address _PLMToken,
-        uint256 _startTime
+        uint256 _startTime,
+        uint256 _epochTimeLength
     ) public {
         require(block.timestamp < _startTime, "startTime must be in the future!");
         require(_PLMToken != address(0), "PLMToken parameter is address(0)");
@@ -70,7 +71,7 @@ contract PLMStakingContract is Ownable, ReentrancyGuard {
         uint256 epochsSinceStartTime = (unixTime - startTime) / epochTimeLength;
 
         // Get the start time of the epoch the user last deposited in.
-        uint256 epochStartTime = startTime + epochsSinceStartTime * epochTimeLength;
+        uint256 epochStartTime = startTime + epochsSinceStartTime * epochTimeLength; 
         uint256 epochEndTime = epochStartTime + epochTimeLength;
 
         return epochEndTime;
@@ -81,7 +82,7 @@ contract PLMStakingContract is Ownable, ReentrancyGuard {
         if (block.timestamp < startTime)
             return 0;
 
-        return (block.timestamp - startTime) / epochTimeLength;
+        return (block.timestamp - startTime) / epochTimeLength; 
     }
 
     // View function to see pending WMATICs on frontend.
@@ -113,20 +114,21 @@ contract PLMStakingContract is Ownable, ReentrancyGuard {
         UserInfo storage user = userInfo[msg.sender];
 
         // Pay what is due from accumulated release (this epoch or previous).
-        payPendingWMATIC();
+        uint256 harvestedWMATIC = payPendingWMATIC(0, false);
 
         if (_amount > 0) {
-            IPLMECR20(PLMToken).burnFrom(msg.sender, _amount);
-
             user.amount+= _amount;
             lifetimePLMStaked[msg.sender]+= _amount;
 
             // Add to the amount of WMATIC reserved for users.
             promisedWMATIC+= _amount;
-
-            // Pay pro rata what was just deposited for the current epoch.
-            payPendingWMATIC();
         }
+        
+        // Pay pro rata what was just deposited for the current epoch.
+        payPendingWMATIC(harvestedWMATIC, true);
+
+        if (_amount > 0)
+            IPLMECR20(PLMToken).burnFrom(msg.sender, _amount);
 
         emit Deposit(msg.sender, _amount);
     }
@@ -153,27 +155,29 @@ contract PLMStakingContract is Ownable, ReentrancyGuard {
     }
 
     // Pay pending WMATICs.
-    function payPendingWMATIC() internal {
+    function payPendingWMATIC(uint256 initialDueWMATIC, bool payNow) internal returns (uint256){
         UserInfo storage user = userInfo[msg.sender];
 
-        uint256 WMATICPending = pendingWMATIC(msg.sender);
+        uint256 WMATICPending = initialDueWMATIC + pendingWMATIC(msg.sender);
 
-        if (WMATICPending > 0) {
-            // If this fails the contract needs to be refilled with WMATIC before it can continue to function.
-            require(WMATIC.balanceOf(address(this)) >= WMATICPending, "contract is being serviced, please wait.");
-            // Send rewards
-            WMATIC.safeTransfer(msg.sender, WMATICPending);
+        resetUserDepositInfo();
 
+        user.lastRewardTimestamp = block.timestamp;
+
+        if (payNow && WMATICPending > 0) {
             // Update amount paid for this epoch
             user.WMATICRewardDebt+= WMATICPending;
 
             // Reduce the amount of WMATIC promised to the user.
             promisedWMATIC-= WMATICPending;
+
+            // If this fails the contract needs to be refilled with WMATIC before it can continue to function.
+            require(WMATIC.balanceOf(address(this)) >= WMATICPending, "contract is being serviced, please wait.");
+            // Send rewards
+            WMATIC.safeTransfer(msg.sender, WMATICPending);
         }
 
-        resetUserDepositInfo();
-
-        user.lastRewardTimestamp = block.timestamp;
+        return WMATICPending;
     }
 
     // Recovery function for excess WMATIC
@@ -192,7 +196,8 @@ contract PLMStakingContract is Ownable, ReentrancyGuard {
 
         uint256 maticBalance = address(this).balance;
 
-        address(recipient).call{value: maticBalance}("");
+        if (maticBalance > 0)
+            address(recipient).call{value: maticBalance}("");
 
         emit RecoverMATIC(recipient, maticBalance);
     }
@@ -204,10 +209,10 @@ contract PLMStakingContract is Ownable, ReentrancyGuard {
 
         uint256 balance = IERC20(token).balanceOf(address(this));
 
-        if (balance > 0) {
+        if (balance > 0)
             IERC20(token).safeTransfer(recipient, balance);
-            emit RecoverERC20Token(token, recipient, balance);
-        }
+
+        emit RecoverERC20Token(token, recipient, balance);
     }
 
     function addToWhiteList(address participant, bool included) external onlyOwner {
