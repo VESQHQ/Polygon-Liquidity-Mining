@@ -70,12 +70,19 @@ contract BoringOwnable is BoringOwnableData {
 contract VaultOwned is BoringOwnable {
     
   address internal _vault;
+  bool public vaultIsLocked = false;
 
   function setVault(address vault_) external onlyOwner() returns (bool) {
     require(vault_ != address(0), "VaultOwned: vault cannot be the 0 address!");
+    require(!vaultIsLocked, "VaultOwned: The Vault cannot be changed!");
     _vault = vault_;
 
     return true;
+  }
+
+  function lockVault() external onlyOwner() {
+    require(!vaultIsLocked, "VaultOwned: The Vault cannot be changed!");
+    vaultIsLocked = true;
   }
 
   function vault() public view returns (address) {
