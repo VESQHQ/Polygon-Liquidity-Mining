@@ -127,6 +127,9 @@ contract PLMStakingContractTest is Ownable, ReentrancyGuard {
 
         UserInfo storage user = userInfo[msg.sender];
 
+        console.log("Before: user.amount %s", user.amount);
+        console.log("Before: user.WMATICRewardDebt %s", user.WMATICRewardDebt);
+
         // Pay what is due from accumulated release (this epoch or previous).
         uint256 harvestedWMATIC = payPendingWMATIC(0, false);
 
@@ -137,9 +140,15 @@ contract PLMStakingContractTest is Ownable, ReentrancyGuard {
             // Add to the amount of WMATIC reserved for users.
             promisedWMATIC+= _amount;
         }
-        
+
+        console.log("After1: user.amount %s", user.amount);
+        console.log("After1: user.WMATICRewardDebt %s", user.WMATICRewardDebt);
+
         // Pay pro rata what was just deposited for the current epoch.
         payPendingWMATIC(harvestedWMATIC, true);
+
+        console.log("After2: user.amount %s", user.amount);
+        console.log("After2: user.WMATICRewardDebt %s", user.WMATICRewardDebt);
 
         if (_amount > 0)
             IPLMECR20(PLMToken).burnFrom(msg.sender, _amount);
@@ -147,26 +156,32 @@ contract PLMStakingContractTest is Ownable, ReentrancyGuard {
         emit Deposit(msg.sender, _amount);
     }
 
-
     // Resets the users deposit accounting if we pass an epoch boundary.
     function resetUserDepositInfo() internal {
+        console.log("resetUserDepositInfo entered");
         UserInfo storage user = userInfo[msg.sender];
 
         uint256 lastRewardTimestampOrStartTime = user.lastRewardTimestamp < startTime ? startTime : user.lastRewardTimestamp;
+
+        console.log("lastRewardTimestampOrStartTime %s", lastRewardTimestampOrStartTime);
 
         // Shouldn't attempt to reset if it's before startTime, or if we have deposited on this timestamp already.
         if (block.timestamp > lastRewardTimestampOrStartTime) {
             uint256 epochEndTime = getNextEpochStartTimeForTimestamp(lastRewardTimestampOrStartTime);
 
-            // If we have passed one or more epoch boundaries we needed to reset before staking PLM.
+            console.log("epochEndTime %s", epochEndTime);
+            // If we have passed one or more epoch boundaries we needed to reset before accounting for PLM.
             if (block.timestamp >= epochEndTime) {
                 // Amount the user has deposited in an epoch should always equal the amount they have harvested for the epoch,
                 // at the end of the epoch.
                 assert(user.amount == user.WMATICRewardDebt);
                 user.amount = 0;
                 user.WMATICRewardDebt = 0;
+
+                console.log("Reset deposit info!");
             }
         }
+        console.log("Didn't reset deposit info!");
     }
 
     // Pay pending WMATICs.
@@ -174,11 +189,16 @@ contract PLMStakingContractTest is Ownable, ReentrancyGuard {
         console.log("payPendingWMATIC entered %s %s", initialDueWMATIC, payNow);
         UserInfo storage user = userInfo[msg.sender];
 
+        console.log("user.lastRewardTimestamp %s", user.lastRewardTimestamp);
+
         uint256 WMATICPending = pendingWMATIC(msg.sender);
 
-        // Update amount paid for this epoch
+        console.log("WMATICPending %s", WMATICPending);
+
+        // Update amount paid for this epoch.
         user.WMATICRewardDebt+= WMATICPending;
 
+        // Can include the harvest release WMATIC.
         WMATICPending+= initialDueWMATIC;
 
         resetUserDepositInfo();

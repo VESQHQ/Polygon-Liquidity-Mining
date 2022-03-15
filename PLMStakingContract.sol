@@ -123,7 +123,7 @@ contract PLMStakingContract is Ownable, ReentrancyGuard {
             // Add to the amount of WMATIC reserved for users.
             promisedWMATIC+= _amount;
         }
-        
+
         // Pay pro rata what was just deposited for the current epoch.
         payPendingWMATIC(harvestedWMATIC, true);
 
@@ -143,7 +143,7 @@ contract PLMStakingContract is Ownable, ReentrancyGuard {
         if (block.timestamp > lastRewardTimestampOrStartTime) {
             uint256 epochEndTime = getNextEpochStartTimeForTimestamp(lastRewardTimestampOrStartTime);
 
-            // If we have passed one or more epoch boundaries we needed to reset before staking PLM.
+            // If we have passed one or more epoch boundaries we needed to reset before accounting for PLM.
             if (block.timestamp >= epochEndTime) {
                 // Amount the user has deposited in an epoch should always equal the amount they have harvested for the epoch,
                 // at the end of the epoch.
@@ -158,16 +158,19 @@ contract PLMStakingContract is Ownable, ReentrancyGuard {
     function payPendingWMATIC(uint256 initialDueWMATIC, bool payNow) internal returns (uint256){
         UserInfo storage user = userInfo[msg.sender];
 
-        uint256 WMATICPending = initialDueWMATIC + pendingWMATIC(msg.sender);
+        uint256 WMATICPending = pendingWMATIC(msg.sender);
+
+        // Update amount paid for this epoch.
+        user.WMATICRewardDebt+= WMATICPending;
+
+        // Can include the harvest release WMATIC.
+        WMATICPending+= initialDueWMATIC;
 
         resetUserDepositInfo();
 
         user.lastRewardTimestamp = block.timestamp;
 
         if (payNow && WMATICPending > 0) {
-            // Update amount paid for this epoch
-            user.WMATICRewardDebt+= WMATICPending;
-
             // Reduce the amount of WMATIC promised to the user.
             promisedWMATIC-= WMATICPending;
 
