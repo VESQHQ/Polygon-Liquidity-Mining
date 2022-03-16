@@ -53,8 +53,7 @@ contract PLMStakingContract is Ownable, ReentrancyGuard {
 
     constructor(
         address _PLMToken,
-        uint256 _startTime,
-        uint256 _epochTimeLength
+        uint256 _startTime
     ) public {
         require(block.timestamp < _startTime, "startTime must be in the future!");
         require(_PLMToken != address(0), "PLMToken parameter is address(0)");
