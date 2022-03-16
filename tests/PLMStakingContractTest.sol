@@ -79,7 +79,7 @@ contract PLMStakingContractTest is Ownable, ReentrancyGuard {
         uint256 epochsSinceStartTime = (unixTime - startTime) / epochTimeLength;
 
         // Get the start time of the epoch the user last deposited in.
-        uint256 epochStartTime = startTime + epochsSinceStartTime * epochTimeLength;
+        uint256 epochStartTime = startTime + epochsSinceStartTime * epochTimeLength; 
         uint256 epochEndTime = epochStartTime + epochTimeLength;
 
         return epochEndTime;
@@ -90,7 +90,7 @@ contract PLMStakingContractTest is Ownable, ReentrancyGuard {
         if (block.timestamp < startTime)
             return 0;
 
-        return (block.timestamp - startTime) / epochTimeLength;
+        return (block.timestamp - startTime) / epochTimeLength; 
     }
 
     // View function to see pending WMATICs on frontend.
@@ -127,71 +127,97 @@ contract PLMStakingContractTest is Ownable, ReentrancyGuard {
 
         UserInfo storage user = userInfo[msg.sender];
 
+        console.log("Before: user.amount %s", user.amount);
+        console.log("Before: user.WMATICRewardDebt %s", user.WMATICRewardDebt);
+
         // Pay what is due from accumulated release (this epoch or previous).
-        payPendingWMATIC();
+        uint256 harvestedWMATIC = payPendingWMATIC(0, false);
 
         if (_amount > 0) {
-            IPLMECR20(PLMToken).burnFrom(msg.sender, _amount);
-
             user.amount+= _amount;
             lifetimePLMStaked[msg.sender]+= _amount;
 
             // Add to the amount of WMATIC reserved for users.
             promisedWMATIC+= _amount;
-
-            // Pay pro rata what was just deposited for the current epoch.
-            payPendingWMATIC();
         }
+
+        console.log("After1: user.amount %s", user.amount);
+        console.log("After1: user.WMATICRewardDebt %s", user.WMATICRewardDebt);
+
+        // Pay pro rata what was just deposited for the current epoch.
+        payPendingWMATIC(harvestedWMATIC, true);
+
+        console.log("After2: user.amount %s", user.amount);
+        console.log("After2: user.WMATICRewardDebt %s", user.WMATICRewardDebt);
+
+        if (_amount > 0)
+            IPLMECR20(PLMToken).burnFrom(msg.sender, _amount);
 
         emit Deposit(msg.sender, _amount);
     }
 
     // Resets the users deposit accounting if we pass an epoch boundary.
     function resetUserDepositInfo() internal {
+        console.log("resetUserDepositInfo entered");
         UserInfo storage user = userInfo[msg.sender];
 
         uint256 lastRewardTimestampOrStartTime = user.lastRewardTimestamp < startTime ? startTime : user.lastRewardTimestamp;
+
+        console.log("lastRewardTimestampOrStartTime %s", lastRewardTimestampOrStartTime);
 
         // Shouldn't attempt to reset if it's before startTime, or if we have deposited on this timestamp already.
         if (block.timestamp > lastRewardTimestampOrStartTime) {
             uint256 epochEndTime = getNextEpochStartTimeForTimestamp(lastRewardTimestampOrStartTime);
 
-            // If we have passed one or more epoch boundaries we needed to reset before staking PLM.
+            console.log("epochEndTime %s", epochEndTime);
+            // If we have passed one or more epoch boundaries we needed to reset before accounting for PLM.
             if (block.timestamp >= epochEndTime) {
                 // Amount the user has deposited in an epoch should always equal the amount they have harvested for the epoch,
                 // at the end of the epoch.
                 assert(user.amount == user.WMATICRewardDebt);
                 user.amount = 0;
                 user.WMATICRewardDebt = 0;
+
+                console.log("Reset deposit info!");
             }
         }
+        console.log("Didn't reset deposit info!");
     }
 
     // Pay pending WMATICs.
-    function payPendingWMATIC() internal {
-        console.log("payPendingWMATIC entered");
+    function payPendingWMATIC(uint256 initialDueWMATIC, bool payNow) internal returns (uint256){
+        console.log("payPendingWMATIC entered %s %s", initialDueWMATIC, payNow);
         UserInfo storage user = userInfo[msg.sender];
+
+        console.log("user.lastRewardTimestamp %s", user.lastRewardTimestamp);
 
         uint256 WMATICPending = pendingWMATIC(msg.sender);
 
-        if (WMATICPending > 0) {
+        console.log("WMATICPending %s", WMATICPending);
+
+        // Update amount paid for this epoch.
+        user.WMATICRewardDebt+= WMATICPending;
+
+        // Can include the harvest release WMATIC.
+        WMATICPending+= initialDueWMATIC;
+
+        resetUserDepositInfo();
+
+        user.lastRewardTimestamp = block.timestamp;
+
+        if (payNow && WMATICPending > 0) {
+            // Reduce the amount of WMATIC promised to the user.
+            promisedWMATIC-= WMATICPending;
+
             // If this fails the contract needs to be refilled with WMATIC before it can continue to function.
             require(WMATIC.balanceOf(address(this)) >= WMATICPending, "contract is being serviced, please wait.");
             // Send rewards
             WMATIC.safeTransfer(msg.sender, WMATICPending);
 
-            // Update amount paid for this epoch
-            user.WMATICRewardDebt+= WMATICPending;
-
-            // Reduce the amount of WMATIC promised to the user.
-            promisedWMATIC-= WMATICPending;
-
             console.log("WMATICPaid %s", WMATICPending);
         }
 
-        resetUserDepositInfo();
-
-        user.lastRewardTimestamp = block.timestamp;
+        return WMATICPending;
     }
 
     // Recovery function for excess WMATIC
@@ -210,7 +236,8 @@ contract PLMStakingContractTest is Ownable, ReentrancyGuard {
 
         uint256 maticBalance = address(this).balance;
 
-        address(recipient).call{value: maticBalance}("");
+        if (maticBalance > 0)
+            address(recipient).call{value: maticBalance}("");
 
         emit RecoverMATIC(recipient, maticBalance);
     }
@@ -222,10 +249,10 @@ contract PLMStakingContractTest is Ownable, ReentrancyGuard {
 
         uint256 balance = IERC20(token).balanceOf(address(this));
 
-        if (balance > 0) {
+        if (balance > 0)
             IERC20(token).safeTransfer(recipient, balance);
-            emit RecoverERC20Token(token, recipient, balance);
-        }
+
+        emit RecoverERC20Token(token, recipient, balance);
     }
 
     function addToWhiteList(address participant, bool included) external onlyOwner {
