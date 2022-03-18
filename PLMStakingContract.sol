@@ -217,9 +217,19 @@ contract PLMStakingContract is Ownable, ReentrancyGuard {
         emit RecoverERC20Token(token, recipient, balance);
     }
 
-    function addToWhiteList(address participant, bool included) external onlyOwner {
-        whitelist[participant] = included;
+    function addToWhiteList(address[] calldata participants) external onlyOwner {
+        for (uint i = 0;i<participants.length;i++) {
+            whitelist[participants[i]] = true;
 
-        emit WhitelistEdit(participant, included);
+            emit WhitelistEdit(participants[i], true);
+        }
+    }
+
+    function removeFromWhiteList(address[] calldata participants) external onlyOwner {
+        for (uint i = 0;i<participants.length;i++) {
+            whitelist[participants[i]] = false;
+
+            emit WhitelistEdit(participants[i], false);
+        }
     }
 }
